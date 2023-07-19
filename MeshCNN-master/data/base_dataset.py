@@ -22,21 +22,27 @@ class BaseDataset(data.Dataset):
         (here N=5)
         """
 
-        mean_std_cache = os.path.join(self.root, 'mean_std_cache.p')
+        mean_std_cache = os.path.join(self.root, 'mean_std_' + self.opt.feat_from + '_cache.p')
         if not os.path.isfile(mean_std_cache):
             print('computing mean std from train data...')
             # doesn't run augmentation during m/std computation
             num_aug = self.opt.num_aug
             self.opt.num_aug = 1
             mean, std = np.array(0), np.array(0)
+            nfaces = 0
             for i, data in enumerate(self):
                 if i % 500 == 0:
                     print('{} of {}'.format(i, self.size))
-                features = data['edge_features']
+                features = data['features']
                 mean = mean + features.mean(axis=1)
                 std = std + features.std(axis=1)
+                if data['mesh'].faces.shape[0] > nfaces:
+                    nfaces = data['mesh'].faces.shape[0]
             mean = mean / (i + 1)
             std = std / (i + 1)
+            if 0 in std:
+                print('WARNING: ZERO value in STD')
+                std[std == 0] = 1
             transform_dict = {'mean': mean[:, np.newaxis], 'std': std[:, np.newaxis],
                               'ninput_channels': len(mean)}
             with open(mean_std_cache, 'wb') as f:
