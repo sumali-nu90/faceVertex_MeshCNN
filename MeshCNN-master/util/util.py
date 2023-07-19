@@ -6,7 +6,7 @@ import wandb
 import glob
 import shutil
 import neuralnet_pytorch as nnt
-from neuralnet_pytorch.utils.tensor_utils import batch_pairwise_dist
+#from neuralnet_pytorch.utils.tensor_utils import batch_pairwise_dist
 
 def clean_data(opt):
     dirs = glob.glob(opt.dataroot + '/*/*/cache') + glob.glob(opt.dataroot + '/*/cache')

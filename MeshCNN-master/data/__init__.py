@@ -18,6 +18,7 @@ class DataLoader:
 
     def __init__(self, opt):
         self.opt = opt
+        # Create dataset with features
         self.dataset = CreateDataset(opt)
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
@@ -27,10 +28,8 @@ class DataLoader:
             collate_fn=collate_fn)
 
     def __len__(self):
-        return min(len(self.dataset), self.opt.max_dataset_size)
+        return len(self.dataset)
 
     def __iter__(self):
         for i, data in enumerate(self.dataloader):
-            if i * self.opt.batch_size >= self.opt.max_dataset_size:
-                break
             yield data

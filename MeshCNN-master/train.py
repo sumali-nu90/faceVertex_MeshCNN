@@ -19,14 +19,14 @@ if __name__ == '__main__':
 
     # TODO: Remove wandb references.
     import wandb
-    wandb.init(project="meshcnn")
+    #wandb.init(project="meshcnn")
     if opt.name == 'sweep':
         if wandb.run.id != None:
             opt.name = wandb.run.id
         else:
             raise ValueError(wandb.run.id, 'Wrong value value in wandb.run.name')
 
-    wandb.config.update(opt, allow_val_change=True)
+    #wandb.config.update(opt, allow_val_change=True)
 
     if opt.clean_data:
         clean_data(opt)
@@ -35,14 +35,14 @@ if __name__ == '__main__':
     dataset = DataLoader(opt)
     dataset_size = len(dataset)
     print('#training meshes = %d' % dataset_size)
-    wandb.config.update({"training_samples": dataset_size})
+    #wandb.config.update({"training_samples": dataset_size})
 
     model = create_model(opt)
     writer = Writer(opt)
     total_steps = 0
     freq_steps = 0
 
-    wandb.watch(model.net, log="all")
+   # wandb.watch(model.net, log="all")
 
     startT = time.time()
 
@@ -67,7 +67,7 @@ if __name__ == '__main__':
                 loss = model.loss
                 writer.print_current_losses(epoch, epoch_iter, loss, t, t_data)
                 writer.plot_loss(loss, epoch, epoch_iter, dataset_size)
-                wandb.log({"loss": loss, "Iters": total_steps, "lr": model.optimizer.param_groups[-1]['lr']})
+                #wandb.log({"loss": loss, "Iters": total_steps, "lr": model.optimizer.param_groups[-1]['lr']})
 
             if i % opt.save_latest_freq == 0:
                 print('saving the latest model (epoch %d, total_steps %d)' %
@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
         print('End of epoch %d / %d \t Time Taken: %d sec' %
               (epoch, opt.niter + opt.niter_decay, time.time() - epoch_start_time))
-        wandb.log({"Epoch": epoch})
+        #wandb.log({"Epoch": epoch})
 
         # TODO: Look into this, I've never used it so maybe I should delete it.
         if opt.verbose_plot:
@@ -93,9 +93,9 @@ if __name__ == '__main__':
         if epoch % opt.run_test_freq == 0:
             acc = run_test(epoch)
             writer.plot_acc(acc, epoch)
-            wandb.log({"Test Accuracy": acc})
+           # wandb.log({"Test Accuracy": acc})
 
         writer.close()
 
-    wandb.log({"Training Time": time.time() - startT})
+    #wandb.log({"Training Time": time.time() - startT})
     run_test()
