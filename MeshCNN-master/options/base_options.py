@@ -24,7 +24,7 @@ class BaseOptions:
                                  help='Number of point samples to do Chamfer Distance')
 
         # network params
-        self.parser.add_argument('--batch_size', type=int, default=16, help='input batch size')
+        self.parser.add_argument('--batch_size', type=int, default=64, help='input batch size')
         self.parser.add_argument('--arch', type=str, default='mconvnet',
                                  choices={"mconvnet", "meshunet", "meshGAN", "meshPointGAN"},
                                  help='selects network to use')

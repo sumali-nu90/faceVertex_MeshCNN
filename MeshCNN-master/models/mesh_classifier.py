@@ -2,7 +2,7 @@ import torch
 from . import networks
 from os.path import join
 from util.util import seg_accuracy, print_network
-import wandb	
+#import wandb	
 import numpy as np	
 import os
 
@@ -44,7 +44,7 @@ class ClassifierModel:
             self.scheduler = networks.get_scheduler(self.optimizer, opt)
             #print_network(self.net)
             num_params = print_network(self.net)	
-            wandb.log({"Params": num_params})
+            #wandb.log({"Params": num_params})
 
         if not self.is_train or opt.continue_train:
             self.load_network(opt.which_epoch)
@@ -68,15 +68,19 @@ class ClassifierModel:
         return out
 
     def backward(self, out):
-        self.loss = self.criterion(out, self.labels)
-        self.loss.backward()
+      self.loss = self.criterion(out, self.labels)
+      # Check batch sizes
+      input_batch_size = out.size(0)
+      target_batch_size = self.labels.size(0)
+      if input_batch_size != target_batch_size:
+          raise ValueError(f"Expected input batch_size ({input_batch_size}) to match target batch_size ({target_batch_size}).")
+      self.loss.backward()
 
     def optimize_parameters(self, epoch=0):
         self.optimizer.zero_grad()
         out = self.forward()
         self.backward(out)
         self.optimizer.step()
-
 
 ##################
 
@@ -105,8 +109,8 @@ class ClassifierModel:
             self.net.cuda(self.gpu_ids[0])
         else:
             torch.save(self.net.cpu().state_dict(), save_path)
-        if wandb_save:	
-            wandb.save(save_path)	
+        #if wandb_save:	
+            #wandb.save(save_path)	
 
     def update_learning_rate(self):
         """update learning rate (called once every epoch)"""

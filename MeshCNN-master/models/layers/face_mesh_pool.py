@@ -4,13 +4,12 @@ from threading import Thread
 from models.layers.mesh_union import MeshUnion
 import numpy as np
 from heapq import heappop, heapify
-
+import math
 
 class FaceMeshPool(nn.Module):
-
     def __init__(self, target, multi_thread=False):
         super(FaceMeshPool, self).__init__()
-        self.__out_target = target
+        self.__out_target = 400  # Modify this line
         self.__multi_thread = multi_thread
         self.__fe = None
         self.__updated_fe = None
@@ -18,25 +17,34 @@ class FaceMeshPool(nn.Module):
         self.__merge_edges = [-1, -1]
 
     def __call__(self, fe, meshes):
-        return self.forward(fe, meshes)
+      return self.forward(fe, meshes)
 
     def forward(self, fe, meshes):
-        self.__updated_fe = [[] for _ in range(len(meshes))]
-        pool_threads = []
-        self.__fe = fe
-        self.__meshes = meshes
-        # iterate over batch
-        for mesh_index in range(len(meshes)):
-            if self.__multi_thread:
-                pool_threads.append(Thread(target=self.__pool_main, args=(mesh_index,)))
-                pool_threads[-1].start()
-            else:
-                self.__pool_main(mesh_index)
-        if self.__multi_thread:
-            for mesh_index in range(len(meshes)):
-                pool_threads[mesh_index].join()
-        out_features = torch.cat(self.__updated_fe).view(len(meshes), -1, self.__out_target)
-        return out_features
+      self.__updated_fe = [[] for _ in range(len(meshes))]
+      pool_threads = []
+      self.__fe = fe
+      self.__meshes = meshes
+      # iterate over batch
+      for mesh_index in range(len(meshes)):
+          if self.__multi_thread:
+              pool_threads.append(Thread(target=self.__pool_main, args=(mesh_index,)))
+              pool_threads[-1].start()
+          else:
+              self.__pool_main(mesh_index)
+      if self.__multi_thread:
+          for mesh_index in range(len(meshes)):
+              pool_threads[mesh_index].join()
+
+      # Print shapes for debugging
+      #print('fe shape:', fe.shape)
+      #print('self.__updated_fe shapes:')
+      for i, updated_fe in enumerate(self.__updated_fe):
+          print(f'[{i}]:', updated_fe.shape)
+
+      out_features = torch.stack(self.__updated_fe).view(len(meshes), -1, self.__out_target)
+      return out_features
+
+
 
     def __pool_main(self, mesh_index):
         mesh = self.__meshes[mesh_index]
@@ -106,22 +114,22 @@ class FaceMeshPool(nn.Module):
         neighbors = np.delete(neighbors, np.where(mesh.edges_in_face[neighbors] == edge_id)[0][0], axis=0)
         mesh.gemm_faces[neighbors[0], np.where(mesh.gemm_faces[neighbors[0]] == face_id)[0][0]] = neighbors[1]
         mesh.gemm_faces[neighbors[1], np.where(mesh.gemm_faces[neighbors[1]] == face_id)[0][0]] = neighbors[0]
-        MeshPoolFace.__union_groups(mesh, face_groups, face_id, neighbors[0])
-        MeshPoolFace.__union_groups(mesh, face_groups, face_id, neighbors[1])
-        MeshPoolFace.__remove_group(mesh, face_groups, face_id)
+        FaceMeshPool.__union_groups(mesh, face_groups, face_id, neighbors[0])
+        FaceMeshPool.__union_groups(mesh, face_groups, face_id, neighbors[1])
+        FaceMeshPool.__remove_group(mesh, face_groups, face_id)
 
     def __clean_side(self, mesh, edge_id, edge_mask, face_mask, face_groups, side):
-        if mesh.face_count <= self.__out_target:
-            return False
-        invalid_edges = MeshPoolFace.__get_invalids(mesh, edge_id, face_groups, side)
-        while len(invalid_edges) != 0 and mesh.face_count > self.__out_target:
-            self.__remove_triplete(mesh, edge_mask, face_mask, face_groups, invalid_edges)
-            if mesh.face_count <= self.__out_target:
-                return False
-            if self.has_boundaries(mesh, edge_id):
-                return False
-            invalid_edges = self.__get_invalids(mesh, edge_id, face_groups, side)
-        return True
+      if mesh.face_count <= self.__out_target:
+          return False
+      invalid_edges = self.__get_invalids(mesh, edge_id, face_groups, side)
+      while len(invalid_edges) != 0 and mesh.face_count > self.__out_target:
+          self.__remove_triplete(mesh, edge_mask, face_mask, face_groups, invalid_edges)
+          if mesh.face_count <= self.__out_target:
+              return False
+          if self.has_boundaries(mesh, edge_id):
+              return False
+          invalid_edges = self.__get_invalids(mesh, edge_id, face_groups, side)
+      return True
 
     @staticmethod
     def has_boundaries(mesh, edge_id):
@@ -138,7 +146,7 @@ class FaceMeshPool(nn.Module):
         return len(shared) == 2
 
     def __pool_side(self, mesh, edge_id, mask, face_groups, side):
-        info = MeshPoolFace.__get_face_info(mesh, edge_id, side)
+        info = FaceMeshPool.__get_face_info(mesh, edge_id, side)
         key_a, key_b, side_a, side_b, _, other_side_b, _, other_keys_b = info
         self.__redirect_edges(mesh, key_a, side_a - side_a % 2, other_keys_b[0], mesh.sides[key_b, other_side_b])
         self.__redirect_edges(mesh, key_a, side_a - side_a % 2 + 1, other_keys_b[1],
@@ -151,9 +159,9 @@ class FaceMeshPool(nn.Module):
 
     @staticmethod
     def __get_invalids(mesh, edge_id, face_groups, side):
-        info = MeshPoolFace.__get_face_info(mesh, edge_id, side)
+        info = FaceMeshPool.__get_face_info(mesh, edge_id, side)
         key_a, key_b, side_a, side_b, other_side_a, other_side_b, other_keys_a, other_keys_b = info
-        shared_items = MeshPoolFace.__get_shared_items(other_keys_a, other_keys_b)
+        shared_items = FaceMeshPool.__get_shared_items(other_keys_a, other_keys_b)
         if len(shared_items) == 0:
             return []
         else:
@@ -163,10 +171,10 @@ class FaceMeshPool(nn.Module):
             update_key_b = other_keys_b[1 - shared_items[1]]
             update_side_a = mesh.sides[key_a, other_side_a + 1 - shared_items[0]]
             update_side_b = mesh.sides[key_b, other_side_b + 1 - shared_items[1]]
-            MeshPoolFace.__redirect_edges(mesh, edge_id, side, update_key_a, update_side_a)
-            MeshPoolFace.__redirect_edges(mesh, edge_id, side + 1, update_key_b, update_side_b)
-            MeshPoolFace.__redirect_edges(mesh, update_key_a, MeshPoolFace.__get_other_side(update_side_a),
-                                           update_key_b, MeshPoolFace.__get_other_side(update_side_b))
+            FaceMeshPool.__redirect_edges(mesh, edge_id, side, update_key_a, update_side_a)
+            FaceMeshPool.__redirect_edges(mesh, edge_id, side + 1, update_key_b, update_side_b)
+            FaceMeshPool.__redirect_edges(mesh, update_key_a, FaceMeshPool.__get_other_side(update_side_a),
+                                           update_key_b, FaceMeshPool.__get_other_side(update_side_b))
             return [key_a, key_b, middle_edge]
 
     @staticmethod
@@ -217,10 +225,10 @@ class FaceMeshPool(nn.Module):
         assert len(faces) == 3
         face_mask[faces[1:]] = 0
 
-        MeshPoolFace.__union_groups(mesh, face_groups, faces[1], faces[0])
-        MeshPoolFace.__union_groups(mesh, face_groups, faces[2], faces[0])
-        MeshPoolFace.__remove_group(mesh, face_groups, faces[1])
-        MeshPoolFace.__remove_group(mesh, face_groups, faces[2])
+        FaceMeshPool.__union_groups(mesh, face_groups, faces[1], faces[0])
+        FaceMeshPool.__union_groups(mesh, face_groups, faces[2], faces[0])
+        FaceMeshPool.__remove_group(mesh, face_groups, faces[1])
+        FaceMeshPool.__remove_group(mesh, face_groups, faces[2])
 
         # Update neighbors of new face
         neighbors = mesh.gemm_faces[faces[1]]
